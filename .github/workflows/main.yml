@@ -1,32 +1,123 @@
-name: Build and Deploy to Tomcat 11
- 
+name: CI-CD (Maven WAR + Deploy to Tomcat)
+
 on:
+  pull_request:
+    branches: [ master ]
   push:
     branches: [ master ]
   workflow_dispatch:
- 
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tomcat-dev-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build-and-deploy:
-    runs-on: [self-hosted, dev]
- 
-    env:
-      WAR_NAME: "ROOT.war"
-      TOMCAT_WEBAPPS: "/var/lib/tomcat9/webapps"
- 
+  build:
+    name: Build WAR (Maven) + Upload Artifact
+    runs-on: ubuntu-latest
+
+    outputs:
+      war_path: ${{ steps.war.outputs.war_path }}
+      version: ${{ steps.meta.outputs.version }}
+
     steps:
-      - name: Checkout source code
+      - name: Checkout
         uses: actions/checkout@v4
- 
-      - name: Make build.sh executable
-        run: chmod +x build.sh
- 
-      - name: Build WAR using build.sh
-        run: ./build.sh
- 
-      - name: Deploy WAR to Tomcat
+
+      - name: Set short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Setup Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+          cache: maven
+
+      - name: Build WAR with dynamic version (1.0.0-<sha>-SNAPSHOT)
         run: |
-          sudo rm -rf "$TOMCAT_WEBAPPS"/*
-          sudo cp "$WAR_NAME" "$TOMCAT_WEBAPPS"
- 
-      - name: Restart Tomcat
-        run: sudo systemctl restart tomcat9
+          ./mvnw -B clean package \
+            -Drevision=1.0.0 \
+            -Dsha1=-${SHORT_SHA} \
+            -Dchangelist=-SNAPSHOT
+
+      - name: Capture version + WAR path
+        id: meta
+        run: |
+          VERSION=$(./mvnw -q -DforceStdout help:evaluate -Dexpression=project.version)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Locate WAR
+        id: war
+        run: |
+          WAR_FILE=$(ls -1 target/*.war | head -n 1)
+          echo "war_path=$WAR_FILE" >> $GITHUB_OUTPUT
+          echo "Built WAR: $WAR_FILE"
+
+      - name: Upload WAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: war-${{ steps.meta.outputs.version }}
+          path: ${{ steps.war.outputs.war_path }}
+
+  deploy-dev:
+    name: Deploy to Tomcat (self-hosted dev)
+    needs: build
+    runs-on: [self-hosted, dev]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    env:
+      TOMCAT_WEBAPPS: "/var/lib/tomcat9/webapps"
+      TOMCAT_SERVICE: "tomcat9"
+
+    steps:
+      - name: Download WAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: war-${{ needs.build.outputs.version }}
+          path: ./artifact
+
+      - name: Show artifact
+        run: |
+          ls -lh ./artifact
+          echo "Deploying version: ${{ needs.build.outputs.version }}"
+
+      - name: Deploy as ROOT.war (safe deploy)
+        run: |
+          set -euo pipefail
+          WAR_FILE=$(ls -1 ./artifact/*.war | head -n 1)
+
+          sudo systemctl stop "$TOMCAT_SERVICE"
+
+          # Backup current ROOT.war if exists
+          if [ -f "$TOMCAT_WEBAPPS/ROOT.war" ]; then
+            sudo cp "$TOMCAT_WEBAPPS/ROOT.war" "$TOMCAT_WEBAPPS/ROOT.war.bak.$(date +%F_%H%M%S)"
+          fi
+
+          # Remove only ROOT app
+          sudo rm -f "$TOMCAT_WEBAPPS/ROOT.war"
+          sudo rm -rf "$TOMCAT_WEBAPPS/ROOT"
+
+          # Copy versioned artifact but deploy as ROOT.war
+          sudo cp "$WAR_FILE" "$TOMCAT_WEBAPPS/ROOT.war"
+
+          sudo systemctl start "$TOMCAT_SERVICE"
+
+      - name: Smoke test
+        run: |
+          set -e
+          for i in {1..30}; do
+            if curl -fsS http://localhost:8080/ >/dev/null; then
+              echo "App is UP ✅"
+              exit 0
+            fi
+            echo "Waiting for app... ($i/30)"
+            sleep 2
+          done
+          echo "App did not become healthy ❌"
+          sudo systemctl status "$TOMCAT_SERVICE" --no-pager || true
+          exit 1
+``
