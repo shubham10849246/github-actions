@@ -1,4 +1,4 @@
-name: Build and Deploy to Tomcat 9
+name: Build and Deploy to Tomcat 11
  
 on:
   push:
