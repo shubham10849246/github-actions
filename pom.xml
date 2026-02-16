@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.snakes</groupId>
+  <artifactId>eb-tomcat-snakes</artifactId>
+
+  <!-- CI-friendly version -->
+  <version>${revision}${sha1}${changelist}</version>
+  <packaging>war</packaging>
+
+  <properties>
+    <!-- Default local build values -->
+    <revision>1.0.0</revision>
+    <sha1>-local</sha1>
+    <changelist>-SNAPSHOT</changelist>
+
+    <!-- Java: your README indicates Java 8 -->
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <build>
+    <!-- Keep finalName versioned so output contains commit id -->
+    <finalName>${project.artifactId}-${project.version}</finalName>
+
+    <!-- Your project currently has sources + webapp under src/ -->
+    <sourceDirectory>src</sourceDirectory>
+
+    <plugins>
+      <!-- Compile Java -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <source>${maven.compiler.source}</source>
+          <target>${maven.compiler.target}</target>
+        </configuration>
+      </plugin>
+
+      <!-- Build WAR from your existing src/ directory -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-war-plugin</artifactId>
+        <version>3.4.0</version>
+        <configuration>
+          <!-- Treat src/ as the web root (JSPs, WEB-INF, css, js, etc.) -->
+          <warSourceDirectory>src</warSourceDirectory>
+
+          <!-- Prevent packaging Java source files into the WAR -->
+          <warSourceExcludes>
+            **/*.java,
+            **/*.class,
+            **/.ebextensions/inactive/**,
+            **/*.sh
+          </warSourceExcludes>
+
+          <!-- If you already have a web.xml, keep it -->
+          <failOnMissingWebXml>false</failOnMissingWebXml>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
