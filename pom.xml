@@ -9,31 +9,102 @@
   <groupId>com.snakes</groupId>
   <artifactId>eb-tomcat-snakes</artifactId>
 
-  <!-- CI-friendly version -->
+  <!-- ✅ Maven CI-friendly versions -->
   <version>${revision}${sha1}${changelist}</version>
   <packaging>war</packaging>
 
   <properties>
-    <!-- Default local build values -->
+    <!-- Default local build -->
     <revision>1.0.0</revision>
     <sha1>-local</sha1>
     <changelist>-SNAPSHOT</changelist>
 
-    <!-- Java: your README indicates Java 8 -->
+    <!-- Java 8 (Tomcat 9 requires Java 8+) -->
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+    <!-- ===== Dependency versions ===== -->
+    <!-- Jackson 2.x supports Java 8; use a modern 2.x LTS line -->
+    <jackson.version>2.21.0</jackson.version>
+
+    <!-- Log4j: your 2.4 is outdated; current maintained 2.25.x exists -->
+    <log4j.version>2.25.3</log4j.version>
+
+    <!-- PostgreSQL JDBC: current releases are 42.7.x -->
+    <postgresql.version>42.7.10</postgresql.version>
+
+    <!-- Tomcat 9 = Servlet 4.0 + JSP 2.3 -->
+    <servlet.version>4.0.1</servlet.version>
+    <jsp.version>2.3.3</jsp.version>
   </properties>
 
+  <dependencies>
+
+    <!-- ✅ Runtime libs (these WILL be packaged in WAR) -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-annotations</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-core</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
+      <version>${log4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-core</artifactId>
+      <version>${log4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-web</artifactId>
+      <version>${log4j.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>${postgresql.version}</version>
+    </dependency>
+
+    <!-- ✅ Provided by Tomcat (these MUST NOT be packaged in WAR) -->
+    <dependency>
+      <groupId>javax.servlet</groupId>
+      <artifactId>javax.servlet-api</artifactId>
+      <version>${servlet.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>javax.servlet.jsp</groupId>
+      <artifactId>javax.servlet.jsp-api</artifactId>
+      <version>${jsp.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+  </dependencies>
+
   <build>
-    <!-- Keep finalName versioned so output contains commit id -->
+    <!-- Output name includes commit based version -->
     <finalName>${project.artifactId}-${project.version}</finalName>
 
-    <!-- Your project currently has sources + webapp under src/ -->
+    <!-- Your legacy sources are under src/ -->
     <sourceDirectory>src</sourceDirectory>
 
     <plugins>
-      <!-- Compile Java -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -44,28 +115,25 @@
         </configuration>
       </plugin>
 
-      <!-- Build WAR from your existing src/ directory -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-war-plugin</artifactId>
         <version>3.4.0</version>
         <configuration>
-          <!-- Treat src/ as the web root (JSPs, WEB-INF, css, js, etc.) -->
+          <!-- treat src/ as web root -->
           <warSourceDirectory>src</warSourceDirectory>
 
-          <!-- Prevent packaging Java source files into the WAR -->
-          <warSourceExcludes>
-            **/*.java,
-            **/*.class,
-            **/.ebextensions/inactive/**,
-            **/*.sh
-          </warSourceExcludes>
+          <!-- safety: prevent any accidental jar-in-lib from being packaged -->
+          <packagingExcludes>
+            WEB-INF/lib/*.jar
+          </packagingExcludes>
 
-          <!-- If you already have a web.xml, keep it -->
           <failOnMissingWebXml>false</failOnMissingWebXml>
         </configuration>
       </plugin>
+
     </plugins>
   </build>
 
 </project>
+``

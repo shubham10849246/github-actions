@@ -1,3 +1,2 @@
-
 /target/
-.mvn/wrapper/*.jar
+src/WEB-INF/lib/*.jar
